@@ -1,4 +1,5 @@
 import debug from "debug";
+import dotenv from "dotenv";
 import express from "express";
 import http from "http";
 import { Server as SocketIO } from "socket.io";
@@ -16,7 +17,7 @@ const serverDebug = debug("server");
 const ioDebug = debug("io");
 const socketDebug = debug("socket");
 
-require("dotenv").config(
+dotenv.config(
   process.env.NODE_ENV !== "development"
     ? { path: ".env.production" }
     : { path: ".env.development" },
@@ -24,7 +25,7 @@ require("dotenv").config(
 
 const app = express();
 const port =
-  process.env.PORT || (process.env.NODE_ENV !== "development" ? 80 : 3002); // default port to listen
+  process.env.PORT || (process.env.NODE_ENV !== "development" ? 8080 : 3002); // default port to listen
 
 app.use(express.static("public"));
 

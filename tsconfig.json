@@ -1,6 +1,8 @@
 {
+  "include": ["src/**/*.ts"],
   "compilerOptions": {
-    "target": "es5",
+    "target": "ES2022",
+    "module": "commonjs",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
