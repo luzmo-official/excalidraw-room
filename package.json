@@ -14,7 +14,8 @@
     "start:dev": "tsx watch --env-file=.env.development src/index.ts",
     "test:code": "eslint src",
     "test:other": "prettier --check . --ignore-path=.gitignore",
-    "test": "npm run test:other && npm run test:code",
+    "test:integration": "npm run build && node --test test/*.test.cjs",
+    "test": "npm run test:other && npm run test:code && npm run test:integration",
     "fix:code": "npm run test:code -- --fix",
     "fix:other": "prettier --write . --ignore-path=.gitignore",
     "fix": "npm run fix:other && npm run fix:code"
