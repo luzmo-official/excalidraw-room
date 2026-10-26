@@ -13,6 +13,31 @@ type OnUserFollowedPayload = {
   action: "FOLLOW" | "UNFOLLOW";
 };
 
+// Keep client-controlled collaboration names separate from Socket.IO's private
+// socket rooms and our follow rooms.
+const collaborationPrefix = "collaboration@";
+const collaborationRoom = (roomID: unknown): string | null =>
+  typeof roomID === "string" &&
+  roomID.length > 0 &&
+  roomID.length <= 256 &&
+  !roomID.startsWith("follow@")
+    ? `${collaborationPrefix}${roomID}`
+    : null;
+const isBinary = (value: unknown) =>
+  value instanceof ArrayBuffer || ArrayBuffer.isView(value);
+
+function isFollowPayload(value: unknown): value is OnUserFollowedPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Partial<OnUserFollowedPayload>;
+  return (
+    (payload.action === "FOLLOW" || payload.action === "UNFOLLOW") &&
+    !!payload.userToFollow &&
+    typeof payload.userToFollow.socketId === "string" &&
+    payload.userToFollow.socketId.length > 0 &&
+    payload.userToFollow.socketId.length <= 256
+  );
+}
+
 const serverDebug = debug("server");
 const ioDebug = debug("io");
 const socketDebug = debug("socket");
@@ -51,9 +76,23 @@ try {
   });
 
   io.on("connection", (socket) => {
+    const broadcastRoom = (roomID: unknown) => {
+      if (roomID === `follow@${socket.id}`) {
+        return Array.from(socket.rooms).some((room) =>
+          room.startsWith(collaborationPrefix),
+        )
+          ? roomID
+          : null;
+      }
+      const room = collaborationRoom(roomID);
+      return room && socket.rooms.has(room) ? room : null;
+    };
     ioDebug("connection established!");
     io.to(`${socket.id}`).emit("init-room");
     socket.on("join-room", async (roomID) => {
+      const room = collaborationRoom(roomID);
+      if (!room) return;
+      roomID = room;
       socketDebug(`${socket.id} has joined ${roomID}`);
       await socket.join(roomID);
       const sockets = await io.in(roomID).fetchSockets();
@@ -73,6 +112,9 @@ try {
     socket.on(
       "server-broadcast",
       (roomID: string, encryptedData: ArrayBuffer, iv: Uint8Array) => {
+        const room = broadcastRoom(roomID);
+        if (!room || !isBinary(encryptedData) || !isBinary(iv)) return;
+        roomID = room;
         socketDebug(`${socket.id} sends update to ${roomID}`);
         socket.broadcast.to(roomID).emit("client-broadcast", encryptedData, iv);
       },
@@ -81,6 +123,9 @@ try {
     socket.on(
       "server-volatile-broadcast",
       (roomID: string, encryptedData: ArrayBuffer, iv: Uint8Array) => {
+        const room = broadcastRoom(roomID);
+        if (!room || !isBinary(encryptedData) || !isBinary(iv)) return;
+        roomID = room;
         socketDebug(`${socket.id} sends volatile update to ${roomID}`);
         socket.volatile.broadcast
           .to(roomID)
@@ -88,8 +133,19 @@ try {
       },
     );
 
-    socket.on("user-follow", async (payload: OnUserFollowedPayload) => {
+    socket.on("user-follow", async (payload: unknown) => {
+      if (!isFollowPayload(payload)) return;
       const roomID = `follow@${payload.userToFollow.socketId}`;
+      if (payload.action === "FOLLOW") {
+        const target = io.sockets.sockets.get(payload.userToFollow.socketId);
+        const sharesRoom =
+          target &&
+          Array.from(socket.rooms).some(
+            (room) =>
+              room.startsWith(collaborationPrefix) && target.rooms.has(room),
+          );
+        if (!sharesRoom) return;
+      }
 
       switch (payload.action) {
         case "FOLLOW": {
@@ -106,6 +162,7 @@ try {
           break;
         }
         case "UNFOLLOW": {
+          if (!socket.rooms.has(roomID)) return;
           await socket.leave(roomID);
 
           const sockets = await io.in(roomID).fetchSockets();
