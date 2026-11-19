@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Pin the scanned base; Dependabot proposes updates to this digest.
-ARG NODE_IMAGE=node:24-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
+ARG NODE_IMAGE=node:24-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5
 
 FROM ${NODE_IMAGE} AS build
 WORKDIR /app
@@ -21,6 +21,8 @@ LABEL org.opencontainers.image.source="https://github.com/luzmo-official/excalid
       org.opencontainers.image.revision=$SOURCE_REVISION
 ENV NODE_ENV=production PORT=8080
 WORKDIR /app
+# Pick up Alpine security fixes released after the pinned base image.
+RUN apk upgrade --no-cache
 # Remove bundled package managers from the runtime filesystem.
 RUN rm -rf /usr/local/lib/node_modules /opt/yarn-v* /root/.npm /root/.cache \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
